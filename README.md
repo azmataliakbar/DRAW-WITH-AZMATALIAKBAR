@@ -37,7 +37,7 @@ On a phone, one finger draws with the active tool, two fingers pinch to zoom and
 - **Properties:** with a selection, the panel changes the selected elements. With nothing selected, it sets the defaults for new elements. Applying a style to a selection also sets the default for new elements.
 - **Shortcuts:** press `?` (or Ctrl+/, or the `?` button) for the full list.
 - **Theme:** the ◐ button cycles System → Light → Dark (☀ / ☾). System follows your computer's setting. Your choice is remembered.
-- **Export:** the Export button saves the drawing area (not the whole screen) as PNG (transparent background), JPG (white background), SVG (vector), or JSON (project file). The signature is never included.
+- **Export:** the Export button saves the drawing area (not the whole screen) as PNG and SVG in the same colours you see (dark background with light text in dark mode; light background with dark text in light mode), JPG with a white background, or JSON (project file). The signature is never included.
 - **Autosave:** the drawing is saved in this browser (IndexedDB) a moment after you stop editing, and restored when you reopen the page. One drawing is kept.
 
 ## Deploy to Netlify

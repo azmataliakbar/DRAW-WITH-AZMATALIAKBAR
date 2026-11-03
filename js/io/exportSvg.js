@@ -15,9 +15,12 @@
   }
 
   // elements: committed elements. Returns the SVG document as a string, or null if empty.
+  // Matches the screen: the current theme's background and "auto" ink.
   function svg(elements) {
     var b = Draw.geometry.contentBounds(elements, PAD);
     if (!b) return null;
+    var mode = Draw.theme.resolved();
+    var background = Draw.theme.colors().canvasBg;
 
     var defs = [];
     var clipIds = {};
@@ -36,7 +39,7 @@
 
     elements.forEach(function (el) {
       if (el.isDeleted) return;
-      Draw.scene.recordElement(el, "light").forEach(function (op) {
+      Draw.scene.recordElement(el, mode).forEach(function (op) {
         var clipId = clipFor(op.clip);
         var open = clipId ? '<g clip-path="url(#' + clipId + ')">' : "<g>";
         var shape;
@@ -64,6 +67,8 @@
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + round(b.w) + '" height="' + round(b.h) +
       '" viewBox="' + round(b.x) + " " + round(b.y) + " " + round(b.w) + " " + round(b.h) + '">\n' +
       (defs.length ? "<defs>" + defs.join("") + "</defs>\n" : "") +
+      '<rect x="' + round(b.x) + '" y="' + round(b.y) + '" width="' + round(b.w) + '" height="' + round(b.h) +
+      '" fill="' + esc(background) + '"/>\n' +
       body.join("\n") + "\n</svg>\n";
   }
 
