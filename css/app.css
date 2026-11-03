@@ -1,0 +1,688 @@
+/* ==========================================================================
+   Breakpoints and sizes: single source of truth.
+   CSS media queries cannot read custom properties, so layout switches use
+   data-layout on <html>, which js/main.js sets from --bp-* below.
+   ========================================================================== */
+:root {
+  --bp-tablet: 640px;          /* >= this: tablet layout (icon toolbar, drawer) */
+  --bp-desktop: 1024px;        /* >= this: desktop layout (three columns) */
+
+  --toolbar-w: 64px;           /* desktop toolbar width */
+  --toolbar-icon-w: 52px;      /* tablet toolbar width */
+  --panel-w: 280px;            /* properties panel width (desktop column / tablet drawer) */
+  --tool-size: 40px;           /* tool button size */
+  --tool-gap: 6px;
+
+  --bg-ui: #ffffff;
+  --bg-panel: #fbfbfb;
+  --canvas-bg: #fdfdfd;
+  --grid-dot: #d0d0d0;
+  --border: #e3e3e3;
+  --text: #1e1e1e;
+  --muted: #6b6b6b;
+  --accent: #6965db;
+  --accent-soft: #e7e6fb;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  --radius: 8px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --zoom-bar-h: 42px;          /* height of the zoom controls bar */
+
+  /* Colour tokens for the light theme (default). Dark overrides are below. */
+  --ink: #1e1e1e;              /* "auto" stroke colour in light mode */
+  --handle-fill: #ffffff;      /* selection handle fill */
+  --watermark: #5f5f5f;
+  color-scheme: light;
+}
+
+/* Dark theme: same names, dark values. Set by js/ui/theme.js on <html data-theme="dark">.
+   --ink must match INK.dark in js/engine/drawElement.js. */
+[data-theme="dark"] {
+  --bg-ui: #1b1b1f;
+  --bg-panel: #232328;
+  --canvas-bg: #121215;
+  --grid-dot: #3a3a42;
+  --border: #37373f;
+  --text: #ececf1;
+  --muted: #9d9daa;
+  --accent: #9d9bf5;
+  --accent-soft: #2e2d4f;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  --ink: #ececf1;
+  --handle-fill: #121215;
+  --watermark: #c4c4d0;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;            /* no page scrolling, no horizontal scrolling */
+  overscroll-behavior: none;
+  background: var(--bg-ui);
+  color: var(--text);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* ---------- App grid (desktop default) ---------- */
+.app {
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  overflow: hidden;
+  grid-template-columns: var(--toolbar-w) minmax(0, 1fr) var(--panel-w);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "toolbar stage panel";
+}
+
+/* ---------- Toolbar ---------- */
+.toolbar {
+  grid-area: toolbar;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--tool-gap);
+  padding: 12px 0;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-ui);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.tool-btn {
+  width: var(--tool-size);
+  height: var(--tool-size);
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tool-btn:hover {
+  background: var(--bg-panel);
+  border-color: var(--border);
+}
+
+.tool-btn.is-active,
+.tool-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Stub tools: present in the shell, wired in Stage 2+ */
+.tool-btn.is-stub {
+  opacity: 0.5;
+}
+
+/* ---------- Stage (canvas area) ---------- */
+.stage {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--canvas-bg);
+}
+
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;          /* we handle pan and pinch ourselves */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Top-right actions: theme, export, and properties (tablet and mobile only) */
+.stage-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.props-toggle {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-ui);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ---------- Zoom controls (bottom-left of stage) ---------- */
+.zoom-controls {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  max-width: calc(100% - 24px);
+  background: var(--bg-ui);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.zoom-controls button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.zoom-controls button:hover {
+  background: var(--bg-panel);
+}
+
+.zoom-controls button[aria-pressed="false"] {
+  color: var(--muted);
+}
+
+.zoom-value {
+  min-width: 48px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Properties panel ---------- */
+.panel {
+  grid-area: panel;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.panel-close {
+  display: none;               /* only shown when the panel is an overlay */
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-ui);
+  cursor: pointer;
+}
+
+.panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+}
+
+/* ==========================================================================
+   Tablet: 640px to 1023px
+   Toolbar collapses to icons; properties becomes a slide-over drawer.
+   ========================================================================== */
+[data-layout="tablet"] .app {
+  grid-template-columns: var(--toolbar-icon-w) minmax(0, 1fr);
+  grid-template-areas: "toolbar stage";
+}
+
+/* Properties toggle is only shown when its panel is a drawer or sheet */
+[data-layout="desktop"] .props-toggle {
+  display: none;
+}
+
+[data-layout="tablet"] .panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: min(var(--panel-w), 85vw);
+  box-shadow: var(--shadow);
+  transform: translateX(100%);
+  visibility: hidden;
+}
+
+[data-layout="tablet"] .panel.is-open {
+  transform: none;
+  visibility: visible;
+}
+
+[data-layout="tablet"] .panel-close {
+  display: inline-block;
+}
+
+/* ==========================================================================
+   Mobile: below 640px (down to 270px)
+   Toolbar becomes a wrapping bottom bar; properties is a full-screen sheet.
+   ========================================================================== */
+[data-layout="mobile"] .app {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "stage" "toolbar";
+}
+
+[data-layout="mobile"] .toolbar {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
+  gap: var(--tool-gap);
+  padding: 6px 8px calc(6px + var(--safe-bottom));
+  border-right: 0;
+  border-top: 1px solid var(--border);
+  min-height: auto;            /* bottom bar grows to fit every row of tools */
+  overflow: visible;
+}
+
+
+[data-layout="mobile"] .panel {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  width: auto;
+  border: 0;
+  transform: translateY(100%);
+  visibility: hidden;
+}
+
+[data-layout="mobile"] .panel.is-open {
+  transform: none;
+  visibility: visible;
+}
+
+[data-layout="mobile"] .panel-close {
+  display: inline-block;
+}
+
+[data-layout="mobile"] .panel-header {
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+}
+
+/* Slide animations only after the first layout pass, so the panel does not
+   animate from its desktop position on page load. */
+[data-layout="tablet"] .app-ready .panel,
+[data-layout="mobile"] .app-ready .panel {
+  transition: transform 0.2s ease, visibility 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-ready .panel {
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   Text editor overlay (positioned by js/ui/textEditor.js)
+   ========================================================================== */
+.text-editor {
+  position: absolute;
+  z-index: 6;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed var(--accent);
+  border-radius: 2px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text);
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  box-sizing: content-box;
+}
+
+/* ==========================================================================
+   Properties panel controls
+   ========================================================================== */
+.prop-section {
+  margin-bottom: 22px;
+}
+
+.prop-section[hidden] {
+  display: none;
+}
+
+.prop-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.prop-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.prop-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.prop-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.prop-choice {
+  flex: 1 1 auto;
+  min-width: 40px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-ui);
+  cursor: pointer;
+}
+
+.prop-choice[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.prop-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.swatch[aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.swatch.is-none {
+  background: repeating-linear-gradient(45deg, #ffffff 0 4px, #e6e6e6 4px 8px);
+}
+
+.prop-color {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.prop-range {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/* ==========================================================================
+   Shortcuts dialog
+   ========================================================================== */
+.shortcuts {
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-ui);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.shortcuts::backdrop {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.shortcuts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcuts-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+#shortcuts-close {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-ui);
+  cursor: pointer;
+}
+
+#shortcuts-body {
+  overflow-y: auto;
+  padding: 8px 18px 18px;
+}
+
+.shortcuts-group h3 {
+  margin: 14px 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shortcuts-group dl {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.shortcuts-group dt {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.shortcuts-group dd {
+  margin: 0;
+}
+
+/* Narrow screens: stack key and action so nothing scrolls sideways */
+[data-layout="mobile"] .shortcuts-group dl {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+[data-layout="mobile"] .shortcuts-group dd {
+  margin-bottom: 8px;
+}
+
+[data-layout="mobile"] .shortcuts-group dt {
+  white-space: normal;
+}
+
+/* ==========================================================================
+   Theme toggle, export button and menu (top-right of the stage)
+   ========================================================================== */
+.icon-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-ui);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--bg-panel);
+}
+
+.text-btn {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.export-wrap {
+  position: relative;
+}
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-ui);
+  box-shadow: var(--shadow);
+}
+
+.export-menu[hidden] {
+  display: none;
+}
+
+.export-menu button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.export-menu button:hover,
+.export-menu button:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
+/* ==========================================================================
+   Signature watermark: bottom-right on desktop and tablet, top-left on phones.
+   Decorative and non-interactive; it is outside the canvas, so pan and zoom leave it fixed.
+   ========================================================================== */
+.watermark {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 2;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: "Great Vibes", "Brush Script MT", cursive;
+  font-size: 24px;
+  line-height: 1.1;
+  white-space: nowrap;
+  color: var(--watermark);
+  opacity: 0.75;
+}
+
+/* Phones: the signature sits at the bottom-right of the canvas, just above the zoom bar
+   (which is above the tool rows). --zoom-bar-h is the zoom bar's height. */
+[data-layout="mobile"] .watermark {
+  top: auto;
+  left: auto;
+  right: 12px;
+  bottom: calc(12px + var(--zoom-bar-h) + 6px);
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   Toast: short confirmation over the canvas. Non-interactive; sits below the top actions.
+   ========================================================================== */
+.toast {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  z-index: 8;
+  max-width: calc(100% - 24px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg-ui);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -6px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+
+.toast.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+/* "Auto" stroke swatch: half dark ink, half light ink, so it reads in both themes */
+.swatch.is-auto {
+  background: linear-gradient(135deg, #1e1e1e 50%, #ececf1 50%);
+}

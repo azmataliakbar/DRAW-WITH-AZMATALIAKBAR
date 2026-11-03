@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-layout="desktop">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Draw</title>
+  <!-- Theme before first paint: System / Light / Dark, remembered in localStorage -->
+  <script>
+    (function () {
+      try {
+        var c = localStorage.getItem("draw.theme");
+        var m = (c === "light" || c === "dark") ? c : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.dataset.theme = m;
+      } catch (e) { /* storage blocked: the CSS default (light) applies */ }
+    })();
+  </script>
+  <!-- Calligraphy font for the watermark. Falls back to the system cursive font when offline. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- Tool bar: left column on desktop, icon column on tablet, bottom bar on mobile -->
+    <nav class="toolbar" aria-label="Tools">
+      <button class="tool-btn" data-tool="select" aria-label="Selection" title="Selection (V or 1)">V</button>
+      <button class="tool-btn is-active" data-tool="rectangle" aria-label="Rectangle" title="Rectangle (R or 2)" aria-pressed="true">R</button>
+      <button class="tool-btn" data-tool="diamond" aria-label="Diamond" title="Diamond (D or 3)">D</button>
+      <button class="tool-btn" data-tool="ellipse" aria-label="Ellipse" title="Ellipse (O or 4)">O</button>
+      <button class="tool-btn" data-tool="arrow" aria-label="Arrow" title="Arrow (A or 5)">A</button>
+      <button class="tool-btn" data-tool="line" aria-label="Line" title="Line (L or 6)">L</button>
+      <button class="tool-btn" data-tool="freedraw" aria-label="Freedraw" title="Freedraw (P or 7)">P</button>
+      <button class="tool-btn" data-tool="text" aria-label="Text" title="Text (T or 8)">T</button>
+      <button class="tool-btn" data-tool="eraser" aria-label="Eraser" title="Eraser (E)">E</button>
+      <button class="tool-btn" data-tool="hand" aria-label="Hand (pan)" title="Hand (H)">H</button>
+    </nav>
+
+    <main class="stage" id="stage">
+      <canvas id="canvas" aria-label="Drawing canvas"></canvas>
+
+      <!-- Signature: decorative, never interactive, kept out of exports (it is not on the canvas) -->
+      <div class="watermark" aria-hidden="true">Idea By: Azmat Ali</div>
+
+      <!-- Top-right actions: theme, export, and (tablet and mobile) properties -->
+      <div class="stage-overlay">
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="Theme" title="Theme">&#9680;</button>
+        <div class="export-wrap">
+          <button type="button" class="icon-btn text-btn" id="export-btn" aria-haspopup="true" aria-expanded="false" aria-controls="export-menu" title="Export or save">Export</button>
+          <div class="export-menu" id="export-menu" role="menu" hidden>
+            <button type="button" role="menuitem" data-format="png">Save as PNG</button>
+            <button type="button" role="menuitem" data-format="jpg">Save as JPG</button>
+            <button type="button" role="menuitem" data-format="svg">Save as SVG</button>
+            <button type="button" role="menuitem" data-format="json">Save as JSON (project)</button>
+          </div>
+        </div>
+        <button class="props-toggle" id="props-toggle" type="button" aria-controls="properties" aria-expanded="false">Properties</button>
+      </div>
+
+      <div class="zoom-controls" role="group" aria-label="Zoom and view">
+        <button type="button" id="zoom-out" aria-label="Zoom out" title="Zoom out (Ctrl+wheel)">&minus;</button>
+        <span class="zoom-value" id="zoom-value" aria-live="polite">100%</span>
+        <button type="button" id="zoom-in" aria-label="Zoom in" title="Zoom in (Ctrl+wheel)">+</button>
+        <button type="button" id="zoom-fit" aria-label="Fit to content" title="Fit to content">Fit</button>
+        <button type="button" id="grid-toggle" aria-pressed="true" title="Toggle dot grid">Grid</button>
+        <button type="button" id="shortcuts-open" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
+      </div>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <!-- Properties: right column on desktop, slide-over drawer on tablet, full-screen sheet on mobile -->
+    <aside class="panel" id="properties" aria-label="Properties">
+      <header class="panel-header">
+        <h2>Properties</h2>
+        <button type="button" class="panel-close" id="props-close">Close</button>
+      </header>
+      <div class="panel-body" id="props-body"></div>
+    </aside>
+
+    <!-- Keyboard shortcuts help -->
+    <dialog id="shortcuts" class="shortcuts" aria-labelledby="shortcuts-title">
+      <header class="shortcuts-head">
+        <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+        <button type="button" id="shortcuts-close">Close</button>
+      </header>
+      <div id="shortcuts-body"></div>
+    </dialog>
+
+  </div>
+
+  <!-- Classic scripts in dependency order (works from file://, no server needed) -->
+  <script src="js/model/types.js"></script>
+  <script src="js/model/element.js"></script>
+  <script src="js/model/geometry.js"></script>
+  <script src="js/model/hitTest.js"></script>
+  <script src="js/store/store.js"></script>
+  <script src="js/store/reducers.js"></script>
+  <script src="js/store/history.js"></script>
+  <script src="js/store/commands.js"></script>
+  <script src="js/ui/theme.js"></script>
+  <script src="js/ui/toast.js"></script>
+  <script src="js/engine/viewport.js"></script>
+  <script src="js/engine/grid.js"></script>
+  <script src="js/engine/drawElement.js"></script>
+  <script src="js/engine/selectionOverlay.js"></script>
+  <script src="js/engine/renderer.js"></script>
+  <script src="js/tools/shapeTool.js"></script>
+  <script src="js/tools/lineTool.js"></script>
+  <script src="js/tools/freedrawTool.js"></script>
+  <script src="js/tools/selectTool.js"></script>
+  <script src="js/tools/eraserTool.js"></script>
+  <script src="js/tools/handTool.js"></script>
+  <script src="js/tools/textTool.js"></script>
+  <script src="js/input/pointer.js"></script>
+  <script src="js/input/keyboard.js"></script>
+  <script src="js/io/download.js"></script>
+  <script src="js/io/exportPng.js"></script>
+  <script src="js/io/exportJpg.js"></script>
+  <script src="js/io/exportSvg.js"></script>
+  <script src="js/io/exportJson.js"></script>
+  <script src="js/io/persistence.js"></script>
+  <script src="js/ui/toolbar.js"></script>
+  <script src="js/ui/textEditor.js"></script>
+  <script src="js/ui/propertiesPanel.js"></script>
+  <script src="js/ui/shortcutsDialog.js"></script>
+  <script src="js/ui/exportMenu.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
